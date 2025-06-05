@@ -94,7 +94,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    // ✅ Scroll-triggered animation for .step using children fallback
+    // Scroll-triggered animation 
     const animateSteps = () => {
         const steps = document.querySelectorAll('.step');
 
@@ -104,7 +104,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     const step = entry.target;
                     step.classList.add('reveal');
 
-                    // Animate children too (safe fallback)
                     const children = step.children;
                     for (let i = 0; i < children.length; i++) {
                         children[i].classList.add('reveal');
@@ -153,36 +152,70 @@ document.addEventListener("DOMContentLoaded", function () {
     };
 
     animateOnScroll('.feature-card');
-    animateSteps(); // apply fixed .step animation
+    animateSteps();
     animateOnScroll('.contact-card');
 
-    // VIDEO AUTOPLAY ON SCROLL & UNMUTE ON VIEW
+    // VIDEO AUTOPLAY + SOUND LOGIC
     const walkthroughVideo = document.getElementById("walkthroughVideo");
     let hasUserInteracted = false;
     let hasVideoBeenActivated = false;
 
-    window.addEventListener("click", () => hasUserInteracted = true);
-    window.addEventListener("scroll", () => hasUserInteracted = true);
+    const setUserInteracted = () => {
+        hasUserInteracted = true;
+    };
+
+    // Capture user interaction for autoplay with sound
+    window.addEventListener("click", setUserInteracted);
+    window.addEventListener("keydown", setUserInteracted);
+    window.addEventListener("touchstart", setUserInteracted);
+
+    const tryPlayVideo = () => {
+        if (!walkthroughVideo) return;
+
+        if (hasUserInteracted && !hasVideoBeenActivated) {
+            walkthroughVideo.muted = false;
+            walkthroughVideo.play().then(() => {
+                hasVideoBeenActivated = true;
+            }).catch(err => {
+                console.warn("Autoplay with sound failed, retrying muted:", err);
+                walkthroughVideo.muted = true;
+                walkthroughVideo.play().catch(() => {});
+            });
+        } else {
+            walkthroughVideo.play().catch(() => {});
+        }
+    };
 
     if (walkthroughVideo) {
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    if (hasUserInteracted && !hasVideoBeenActivated) {
-                        walkthroughVideo.muted = false;
-                        walkthroughVideo.play().catch(err => {
-                            console.warn("Playback with sound failed:", err);
-                        });
-                        hasVideoBeenActivated = true;
-                    } else {
-                        walkthroughVideo.play();
-                    }
+                    tryPlayVideo();
                 } else {
                     walkthroughVideo.pause();
                 }
             });
-        }, { threshold: 0.6 });
+        }, {
+            threshold: 0.4,
+            rootMargin: "0px 0px -100px 0px"
+        });
 
-        observer.observe(walkthroughVideo);
+        walkthroughVideo.addEventListener("loadeddata", () => {
+            observer.observe(walkthroughVideo);
+
+            // In case already visible on load
+            const rect = walkthroughVideo.getBoundingClientRect();
+            const inView = rect.top < window.innerHeight && rect.bottom > 0;
+            if (inView && hasUserInteracted) {
+                tryPlayVideo();
+            }
+        });
+
+        // Fallback- allow user to click the video directly to unmute/play
+        walkthroughVideo.addEventListener("click", () => {
+            hasUserInteracted = true;
+            walkthroughVideo.muted = false;
+            walkthroughVideo.play().catch(() => {});
+        });
     }
 });
